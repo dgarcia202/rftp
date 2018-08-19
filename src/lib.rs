@@ -36,10 +36,10 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         print!("rftp>");
         io::stdout().flush()?;
 
-        let mut command = String::new();
-        io::stdin().read_line(&mut command).expect("Failed to read line");
+        let mut user_command = String::new();
+        io::stdin().read_line(&mut user_command).expect("Failed to read line");
 
-        if command.trim() == "q" || command.trim() == "quit" {
+        if user_command.trim() == "q" || user_command.trim() == "quit" {
             println!("bye!");
             break;
         }
@@ -56,14 +56,12 @@ fn login_to_server(
 
     let mut user_command: String = "USER ".to_owned();
     user_command.push_str(username);
-    user_command.push('\n');
-    send_command_to_server(writer, user_command.as_bytes())?;  // enter login
+    send_command_to_server(writer, &mut user_command)?;  // enter login
     read_server_response(reader)?;
 
     let mut pass_command: String = "PASS ".to_owned();
     pass_command.push_str(password);
-    pass_command.push('\n');
-    send_command_to_server(writer, pass_command.as_bytes())?;  // enter password
+    send_command_to_server(writer, &mut pass_command)?;  // enter password
     read_server_response(reader)?;
 
     Ok(())
@@ -76,8 +74,9 @@ fn read_server_response(reader: &mut BufReader<&TcpStream>) -> Result<(), std::i
     Ok(())
 }
 
-fn send_command_to_server(writer: &mut BufWriter<&TcpStream>, command: &[u8]) -> Result<(), std::io::Error> {
-    writer.write(command)?;
+fn send_command_to_server(writer: &mut BufWriter<&TcpStream>, command: &mut String) -> Result<(), std::io::Error> {
+    command.push('\n');
+    writer.write(command.as_bytes())?;
     writer.flush()?;
     Ok(())
 }
