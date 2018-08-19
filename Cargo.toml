@@ -1,0 +1,6 @@
+[package]
+name = "rftp"
+version = "0.1.0"
+authors = ["Diego Garcia <wft2000@gmail.com>"]
+
+[dependencies]
