@@ -24,7 +24,6 @@ impl Config {
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-
     
     let stream = TcpStream::connect(&config.host)?;
     let mut reader = BufReader::new(&stream);
@@ -45,11 +44,20 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         io::stdin().read_line(&mut user_command)?;
 
         if user_command.trim() == "q" || user_command.trim() == "quit" {
-            println!("bye!");
+            quit_session(&mut reader, &mut writer)?;
             break;
         }
     }
 
+    Ok(())
+}
+
+fn quit_session(
+    reader: &mut BufReader<&TcpStream>, 
+    writer: &mut BufWriter<&TcpStream>) -> Result<(), std::io::Error> {
+
+    send_command_to_server(writer, "QUIT\r\n")?;
+    read_server_response(reader)?;
     Ok(())
 }
 
@@ -75,8 +83,7 @@ fn login_to_server(
     print!("Password:");
     io::stdout().flush()?;
     let mut password = rpassword::read_password()?;
-    password.push('\r');    // Ftp protocol need line feed and carriage return that rpassword is not providing.
-    password.push('\n');
+    password.push_str("\r\n");    // Ftp protocol need line feed and carriage return that rpassword is not providing.
 
     // Build ftp PASS command.
     let mut pass_command: String = "PASS ".to_owned();
@@ -96,7 +103,7 @@ fn read_server_response(reader: &mut BufReader<&TcpStream>) -> Result<(), std::i
     Ok(())
 }
 
-fn send_command_to_server(writer: &mut BufWriter<&TcpStream>, command: &mut String) -> Result<(), std::io::Error> {
+fn send_command_to_server(writer: &mut BufWriter<&TcpStream>, command: &str) -> Result<(), std::io::Error> {
     writer.write(command.as_bytes())?;
     writer.flush()?;
     Ok(())
