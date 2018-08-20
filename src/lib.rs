@@ -34,7 +34,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     // Show server's welcome message.
     read_server_response(&mut reader)?;
 
-    login_to_server(&mut reader, &mut writer)?;
+    login_to_server(&mut reader, &mut writer)?;    
 
     loop {
         print!("rftp>");
@@ -44,20 +44,20 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         io::stdin().read_line(&mut user_command)?;
 
         if user_command.trim() == "q" || user_command.trim() == "quit" {
-            quit_session(&mut reader, &mut writer)?;
+            send_command_to_server(&mut writer, "QUIT\r\n")?;
+            read_server_response(&mut reader)?;
             break;
         }
+
+        if user_command.trim() == "pwd" {
+            send_command_to_server(&mut writer, "PWD\r\n")?;
+            read_server_response(&mut reader)?;
+            continue;
+        }
+
+        println!("Invalid command");
     }
 
-    Ok(())
-}
-
-fn quit_session(
-    reader: &mut BufReader<&TcpStream>, 
-    writer: &mut BufWriter<&TcpStream>) -> Result<(), std::io::Error> {
-
-    send_command_to_server(writer, "QUIT\r\n")?;
-    read_server_response(reader)?;
     Ok(())
 }
 
@@ -96,11 +96,11 @@ fn login_to_server(
     Ok(())
 }
 
-fn read_server_response(reader: &mut BufReader<&TcpStream>) -> Result<(), std::io::Error> {
+fn read_server_response(reader: &mut BufReader<&TcpStream>) -> Result<String, std::io::Error> {
     let mut buffer = String::new();
     reader.read_line(&mut buffer)?;
     println!("{}", buffer.trim());
-    Ok(())
+    Ok(buffer)
 }
 
 fn send_command_to_server(writer: &mut BufWriter<&TcpStream>, command: &str) -> Result<(), std::io::Error> {
