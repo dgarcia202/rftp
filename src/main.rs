@@ -12,8 +12,6 @@ fn main() {
         process::exit(1)
     });
 
-    println!("Connecting to host {}", config.host);
-
     if let Err(err) = rftp::run(config) {
         println!("Application error: {}", err);
         process::exit(1)
