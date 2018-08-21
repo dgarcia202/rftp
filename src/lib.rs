@@ -1,10 +1,12 @@
 extern crate rpassword;
+extern crate regex;
 
 use std::io;
 use std::io::Write;
 use std::io::prelude::*;
 use std::net::TcpStream;
 use std::error::Error;
+use regex::Regex;
 
 use std::io::{BufReader, BufWriter};
 
@@ -25,14 +27,13 @@ impl Config {
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     
+    let regex_cdw = Regex::new(r"^cwd (\S+)$")?;
+
     let stream = TcpStream::connect(&config.host)?;
     let mut reader = BufReader::new(&stream);
     let mut writer = BufWriter::new(&stream);
 
     println!("Connected to {}", &config.host);
-
-    // Show server's welcome message.
-    read_server_response(&mut reader)?;
 
     login_to_server(&mut reader, &mut writer)?;    
 
@@ -42,15 +43,26 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
         let mut user_command = String::new();
         io::stdin().read_line(&mut user_command)?;
+        let user_command = user_command.trim();
 
-        if user_command.trim() == "q" || user_command.trim() == "quit" {
+        if user_command == "q" || user_command == "quit" {
             send_command_to_server(&mut writer, "QUIT\r\n")?;
             read_server_response(&mut reader)?;
             break;
         }
 
-        if user_command.trim() == "pwd" {
+        if user_command == "pwd" {
             send_command_to_server(&mut writer, "PWD\r\n")?;
+            read_server_response(&mut reader)?;
+            continue;
+        }
+
+        if regex_cdw.is_match(user_command) {
+            let caps = regex_cdw.captures(user_command).unwrap();
+            let mut cwd_command = "CWD ".to_owned();
+            cwd_command.push_str(&caps[1]);
+            cwd_command.push_str("\r\n");
+            send_command_to_server(&mut writer, &mut cwd_command)?;
             read_server_response(&mut reader)?;
             continue;
         }
@@ -64,6 +76,9 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 fn login_to_server(
     reader: &mut BufReader<&TcpStream>, 
     writer: &mut BufWriter<&TcpStream>) -> Result<(), std::io::Error> {
+
+    // Show server's welcome message.
+    read_server_response(reader)?;
 
     // Obtain username from console prompt.
     print!("User:");
@@ -94,6 +109,17 @@ fn login_to_server(
     read_server_response(reader)?;
 
     Ok(())
+}
+
+fn list(
+    reader: &mut BufReader<&TcpStream>, 
+    writer: &mut BufWriter<&TcpStream>) -> Result<(), std::io::Error> {
+}
+
+fn enter_passive_mode(
+    reader: &mut BufReader<&TcpStream>, 
+    writer: &mut BufWriter<&TcpStream>) -> Result<(), std::io::Error> {
+
 }
 
 fn read_server_response(reader: &mut BufReader<&TcpStream>) -> Result<String, std::io::Error> {
