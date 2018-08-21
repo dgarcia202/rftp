@@ -6,9 +6,9 @@ use std::io::Write;
 use std::io::prelude::*;
 use std::net::TcpStream;
 use std::error::Error;
-use regex::Regex;
-
+use std::fmt;
 use std::io::{BufReader, BufWriter};
+use regex::Regex;
 
 pub struct Config {
     pub host: String,
@@ -25,9 +25,22 @@ impl Config {
     }
 }
 
+#[derive(Debug)]
+struct RftpError(String);
+
+impl Error for RftpError {
+
+}
+
+impl fmt::Display for RftpError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     
-    let regex_cdw = Regex::new(r"^cwd (\S+)$")?;
+    let regex_cwd = Regex::new(r"^cwd (\S+)$")?;
 
     let stream = TcpStream::connect(&config.host)?;
     let mut reader = BufReader::new(&stream);
@@ -57,13 +70,18 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             continue;
         }
 
-        if regex_cdw.is_match(user_command) {
-            let caps = regex_cdw.captures(user_command).unwrap();
+        if regex_cwd.is_match(user_command) {
+            let caps = regex_cwd.captures(user_command).unwrap();
             let mut cwd_command = "CWD ".to_owned();
             cwd_command.push_str(&caps[1]);
             cwd_command.push_str("\r\n");
             send_command_to_server(&mut writer, &mut cwd_command)?;
             read_server_response(&mut reader)?;
+            continue;
+        }
+
+        if user_command == "list" || user_command == "ls" {
+            list(&mut reader, &mut writer)?;
             continue;
         }
 
@@ -113,13 +131,57 @@ fn login_to_server(
 
 fn list(
     reader: &mut BufReader<&TcpStream>, 
-    writer: &mut BufWriter<&TcpStream>) -> Result<(), std::io::Error> {
+    writer: &mut BufWriter<&TcpStream>) -> Result<(), Box<dyn Error>> {
+    
+    let (ip_addr, port) = enter_passive_mode(reader, writer)?;
+
+    // Build host connection string.
+    let mut host = ip_addr.clone();
+    host.push(':');
+    host.push_str(&port.to_string());
+
+    // Open data stream.
+    let mut data_stream = TcpStream::connect(host)?;
+
+    // Send list command
+    send_command_to_server(writer, "LIST\r\n")?;
+    read_server_response(reader)?;
+
+    // Read result in data connection
+    let mut buffer = String::new();
+    data_stream.read_to_string(&mut buffer)?;
+
+    println!("{}", buffer);
+
+    read_server_response(reader)?;
+
+    Ok(())
 }
 
 fn enter_passive_mode(
     reader: &mut BufReader<&TcpStream>, 
-    writer: &mut BufWriter<&TcpStream>) -> Result<(), std::io::Error> {
+    writer: &mut BufWriter<&TcpStream>) -> Result<(String, u32), Box<dyn Error>> {
 
+    let regex_pasv = Regex::new(r"^227 Entering Passive Mode \(([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+)\)$")?;
+
+    send_command_to_server(writer, "PASV\r\n")?;
+    let response = read_server_response(reader)?;
+    let response = response.trim();
+
+    if regex_pasv.is_match(&response) {
+
+        let caps = regex_pasv.captures(&response).unwrap();
+
+        let ip_addr = format!("{}.{}.{}.{}", &caps[1], &caps[2], &caps[3], &caps[4]);
+
+        let p1 = &caps[5].parse::<u32>()?;
+        let p2 = &caps[6].parse::<u32>()?;
+        let port = (p1 * 256) + p2;
+        
+        return Ok((ip_addr, port));
+    }
+    
+    Err(Box::new(RftpError("Server response couldn't be parsed".into())))
 }
 
 fn read_server_response(reader: &mut BufReader<&TcpStream>) -> Result<String, std::io::Error> {
