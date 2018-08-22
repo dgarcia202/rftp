@@ -6,9 +6,10 @@ use std::io::Write;
 use std::io::prelude::*;
 use std::net::TcpStream;
 use std::error::Error;
-use std::fmt;
 use std::io::{BufReader, BufWriter};
 use regex::Regex;
+
+pub mod core;
 
 pub struct Config {
     pub host: String,
@@ -25,22 +26,9 @@ impl Config {
     }
 }
 
-#[derive(Debug)]
-struct RftpError(String);
-
-impl Error for RftpError {
-
-}
-
-impl fmt::Display for RftpError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     
-    let regex_cwd = Regex::new(r"^cwd (\S+)$")?;
+    let regex_cwd = Regex::new(r"^cd (\S+)$")?;
 
     let stream = TcpStream::connect(&config.host)?;
     let mut reader = BufReader::new(&stream);
@@ -181,7 +169,7 @@ fn enter_passive_mode(
         return Ok((ip_addr, port));
     }
     
-    Err(Box::new(RftpError("Server response couldn't be parsed".into())))
+    Err(Box::new(core::RftpError("Server response couldn't be parsed".into())))
 }
 
 fn read_server_response(reader: &mut BufReader<&TcpStream>) -> Result<String, std::io::Error> {
