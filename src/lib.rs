@@ -47,6 +47,11 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         io::stdin().read_line(&mut user_command)?;
         let user_command = user_command.trim();
 
+        if user_command == "h" || user_command == "help" {
+            show_help();
+            continue;
+        }
+
         if user_command == "q" || user_command == "quit" {
             send_command_to_server(&mut writer, "QUIT\r\n")?;
             read_server_response(&mut reader)?;
@@ -78,4 +83,12 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+fn show_help() {
+    println!("\th | help: Shows this help.");
+    println!("\tpwd: shows current remote directory.");
+    println!("\tcd <directory>: Moves current directory to the specified one.");
+    println!("\tls: List contents of the current directory.");
+    println!("\tq | quit: Ends remote session.");
 }
