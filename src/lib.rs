@@ -30,6 +30,7 @@ impl Config {
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     
     let regex_cwd = Regex::new(r"^cd (\S+)$")?;
+    let regex_get = Regex::new(r"^get (\S+)$")?;
 
     let stream = TcpStream::connect(&config.host)?;
     let mut reader = BufReader::new(&stream);
@@ -46,6 +47,10 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         let mut user_command = String::new();
         io::stdin().read_line(&mut user_command)?;
         let user_command = user_command.trim();
+
+        if user_command == "" {
+            continue;
+        }
 
         if user_command == "h" || user_command == "help" {
             show_help();
@@ -76,6 +81,12 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
         if user_command == "list" || user_command == "ls" {
             list(&mut reader, &mut writer)?;
+            continue;
+        }
+
+        if regex_get.is_match(user_command) {
+            let caps = regex_get.captures(user_command).unwrap();
+            get_file(&mut reader, &mut writer, &caps[1])?;
             continue;
         }
 

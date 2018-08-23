@@ -6,6 +6,7 @@ use std::io::prelude::*;
 use std::io::{BufReader, BufWriter};
 use std::net::TcpStream;
 use std::error::Error;
+use std::fs::File;
 use regex::Regex;
 
 pub use ::core;
@@ -52,15 +53,9 @@ pub fn list(
     reader: &mut BufReader<&TcpStream>, 
     writer: &mut BufWriter<&TcpStream>) -> Result<(), Box<dyn Error>> {
     
-    let (ip_addr, port) = enter_passive_mode(reader, writer)?;
-
-    // Build host connection string.
-    let mut host = ip_addr.clone();
-    host.push(':');
-    host.push_str(&port.to_string());
-
     // Open data stream.
-    let mut data_stream = TcpStream::connect(host)?;
+    let (ip_addr, port) = enter_passive_mode(reader, writer)?;
+    let mut data_stream = TcpStream::connect(build_connection_string(ip_addr, port))?;
 
     // Send list command
     send_command_to_server(writer, "LIST\r\n")?;
@@ -73,6 +68,35 @@ pub fn list(
     println!("{}", buffer);
 
     read_server_response(reader)?;
+
+    Ok(())
+}
+
+pub fn get_file(
+    reader: &mut BufReader<&TcpStream>, 
+    writer: &mut BufWriter<&TcpStream>,
+    file_name: &str) -> Result<(), Box<dyn Error>> {
+    
+    // Open data stream.
+    let (ip_addr, port) = enter_passive_mode(reader, writer)?;
+    let mut data_stream = TcpStream::connect(build_connection_string(ip_addr, port))?;
+
+    // Send RETR command
+    send_command_to_server(writer, &format!("RETR {}\r\n", file_name))?;
+    let server_response = read_server_response(reader)?;
+    if server_response.starts_with("550") {
+        return Ok(());
+    }
+
+    // Read file in data connection
+    let mut buffer: Vec<u8> = Vec::new();
+    let size = data_stream.read_to_end(&mut buffer)?;
+
+    println!("Downloaded {} bytes", size);
+
+    read_server_response(reader)?;
+
+    save_to_file(&buffer, file_name)?;
 
     Ok(())
 }
@@ -113,5 +137,27 @@ pub fn read_server_response(reader: &mut BufReader<&TcpStream>) -> Result<String
 pub fn send_command_to_server(writer: &mut BufWriter<&TcpStream>, command: &str) -> Result<(), io::Error> {
     writer.write(command.as_bytes())?;
     writer.flush()?;
+    Ok(())
+}
+
+fn build_connection_string(ip_addr: String, port: u32) -> String {
+    let mut connection_string = ip_addr.clone();
+    connection_string.push(':');
+    connection_string.push_str(&port.to_string());
+    connection_string
+}
+
+fn save_to_file(bytes: &Vec<u8>, file_name: &str) -> Result<(), io::Error> {
+
+    let mut file = File::create(file_name)?;
+
+    // TODO: Optimize this
+    for b in bytes {
+        let mut buff_small: [u8; 1] = [0];
+        buff_small[0] = *b;
+        file.write(&buff_small)?;
+    }
+
+    file.flush()?;
     Ok(())
 }
